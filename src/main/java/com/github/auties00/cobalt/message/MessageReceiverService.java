@@ -227,6 +227,7 @@ public final class MessageReceiverService {
                 var recipient = infoNode
                         .getAttributeAsJid("recipient_pn")
                         .or(() -> infoNode.getAttributeAsJid("recipient"))
+                        .or(() -> infoNode.getAttributeAsJid("sender_pn"))
                         .orElse(from);
                 keyBuilder.chatJid(recipient);
                 keyBuilder.senderJid(from);
