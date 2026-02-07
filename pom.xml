@@ -201,6 +201,10 @@
                     <source>25</source>
                     <target>25</target>
                     <release>${java.version}</release>
+                    <proc>full</proc>
+                    <annotationProcessors>
+                        <annotationProcessor>it.auties.protobuf.serialization.ProtobufJavacPlugin</annotationProcessor>
+                    </annotationProcessors>
                     <annotationProcessorPaths>
                         <annotationProcessorPath>
                             <groupId>com.github.auties00</groupId>
