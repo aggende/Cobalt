@@ -120,8 +120,8 @@ public final class WhatsAppClient {
     WhatsAppClient(WhatsAppStore store, WhatsAppClientVerificationHandler.Web webVerificationHandler, WhatsAppClientMessagePreviewHandler messagePreviewHandler, WhatsAppClientErrorHandler errorHandler) {
         this.store = Objects.requireNonNull(store, "store cannot be null");
         this.errorHandler = Objects.requireNonNull(errorHandler, "errorHandler cannot be null");
-        if ((store.clientType() == WhatsAppClientType.WEB) == (webVerificationHandler == null)) {
-            throw new IllegalArgumentException("webVerificationHandler cannot be null when client type is WEB");
+        if (store.clientType() == WhatsAppClientType.WEB && webVerificationHandler == null && !store.registered()) {
+            throw new IllegalArgumentException("webVerificationHandler cannot be null when client type is WEB and session is not registered");
         }
         var sessionCipher = new SignalSessionCipher(store);
         var groupCipher = new SignalGroupCipher(store);
