@@ -33,14 +33,14 @@
         <repository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/${{github.repository_owner}}/cobalt</url>
+            <url>https://maven.pkg.github.com/aggende/cobalt</url>
         </repository>
     </distributionManagement>
 
     <repositories>
         <repository>
             <id>github</id>
-            <url>https://maven.pkg.github.com/${{github.repository_owner}}/cobalt</url>
+            <url>https://maven.pkg.github.com/aggende/cobalt</url>
         </repository>
         <repository>
             <id>jitpack.io</id>
