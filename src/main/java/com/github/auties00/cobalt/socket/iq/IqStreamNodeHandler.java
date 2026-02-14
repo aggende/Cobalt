@@ -4,6 +4,7 @@ import com.github.auties00.cobalt.client.WhatsAppClient;
 import com.github.auties00.cobalt.client.WhatsAppClientDisconnectReason;
 import com.github.auties00.cobalt.client.WhatsAppClientVerificationHandler;
 import com.github.auties00.cobalt.exception.ADVValidationException;
+import com.github.auties00.cobalt.exception.NodeTimeoutException;
 import com.github.auties00.cobalt.exception.SessionClosedException;
 import com.github.auties00.cobalt.model.auth.DeviceIdentitySpec;
 import com.github.auties00.cobalt.model.auth.SignedDeviceIdentity;
@@ -29,15 +30,18 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.github.auties00.cobalt.client.WhatsAppClientErrorHandler.Location.AUTH;
 
 public final class IqStreamNodeHandler extends SocketStream.Handler {
     private static final int PING_INTERVAL = 30;
+    private static final int MAX_RECONNECT_ATTEMPTS = 2;
 
     private final WhatsAppClientVerificationHandler.Web webVerificationHandler;
     private final SocketPhonePairing pairingCode;
     private final Executor pingExecutor;
+    private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
     public IqStreamNodeHandler(WhatsAppClient whatsapp, WhatsAppClientVerificationHandler.Web webVerificationHandler, SocketPhonePairing pairingCode) {
         super(whatsapp, "iq");
         this.webVerificationHandler = webVerificationHandler;
@@ -125,12 +129,20 @@ public final class IqStreamNodeHandler extends SocketStream.Handler {
 
     private void schedulePing() {
         var result = sendPing();
-        if(result == null) {
-            whatsapp.disconnect(WhatsAppClientDisconnectReason.RECONNECTING);
-        }else {
-            var store = whatsapp.store();
-            store.serialize();
+        if (result == null) {
+            int attempts = reconnectAttempts.incrementAndGet();
+            if (attempts <= MAX_RECONNECT_ATTEMPTS) {
+                whatsapp.disconnect(WhatsAppClientDisconnectReason.RECONNECTING);
+                pingExecutor.execute(this::schedulePing);
+            } else {
+                whatsapp.disconnect(WhatsAppClientDisconnectReason.DISCONNECTED);
+            }
+            return;
         }
+
+        reconnectAttempts.set(0);
+        var store = whatsapp.store();
+        store.serialize();
         pingExecutor.execute(this::schedulePing);
     }
 
@@ -146,7 +158,7 @@ public final class IqStreamNodeHandler extends SocketStream.Handler {
                     .attribute("type", "get")
                     .content(pingBody);
             return whatsapp.sendNode(pingRequest);
-        }catch (SessionClosedException throwable) {
+        }catch (SessionClosedException | NodeTimeoutException throwable) {
             return null;
         }
     }
