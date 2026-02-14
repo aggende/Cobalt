@@ -227,13 +227,15 @@ public final class MessageReceiverService {
                 var recipient = infoNode
                         .getAttributeAsJid("recipient_pn")
                         .or(() -> infoNode.getAttributeAsJid("recipient"))
-                        .or(() -> infoNode.getAttributeAsJid("sender_pn"))
                         .orElse(from);
                 keyBuilder.chatJid(recipient);
                 keyBuilder.senderJid(from);
                 var fromMe = Objects.equals(from.withoutData(), localJid.withoutData());
                 keyBuilder.fromMe(fromMe);
                 messageBuilder.senderJid(from);
+                
+                infoNode.getAttributeAsJid("sender_pn")
+                        .ifPresent(messageBuilder::originalSender);
             }else if(from.hasServer(JidServer.bot())) {
                 var meta = infoNode.getChild("meta")
                         .orElseThrow();
@@ -266,7 +268,10 @@ public final class MessageReceiverService {
                 return Stream.empty();
             }
 
-            var container = decodeChatMessageContainer(chatMessageKey, messageNode);
+            var signalSenderJid = infoNode.getAttributeAsJid("sender_pn")
+                    .map(pn -> pn.withDevice(from.device()))
+                    .orElse(chatMessageKey.senderJid().orElse(chatMessageKey.chatJid()));
+            var container = decodeChatMessageContainer(chatMessageKey, messageNode, signalSenderJid);
             var info = messageBuilder.key(chatMessageKey)
                     .broadcast(chatMessageKey.chatJid().hasServer(JidServer.broadcast()))
                     .pushName(pushName)
@@ -277,7 +282,7 @@ public final class MessageReceiverService {
                     .build();
             info.message()
                     .senderKeyDistributionMessage()
-                    .ifPresent(keyDistributionMessage -> handleSenderKeyDistributionMessage(keyDistributionMessage, info.senderJid().toSignalAddress()));
+                    .ifPresent(keyDistributionMessage -> handleSenderKeyDistributionMessage(keyDistributionMessage, signalSenderJid.toSignalAddress()));
             attributeChatMessage(info);
             return Stream.of(info);
         } catch (Throwable throwable) {
@@ -296,7 +301,7 @@ public final class MessageReceiverService {
         }
     }
 
-    private MessageContainer decodeChatMessageContainer(ChatMessageKey messageKey, Node messageNode) {
+    private MessageContainer decodeChatMessageContainer(ChatMessageKey messageKey, Node messageNode, Jid signalSenderJid) {
         if (messageNode == null) {
             return MessageContainer.empty();
         }
@@ -308,7 +313,7 @@ public final class MessageReceiverService {
         }
 
         try {
-            return signalMessageDecoder.decode(messageKey, type, encodedMessage.get());
+            return signalMessageDecoder.decode(signalSenderJid, messageKey.chatJid(), type, encodedMessage.get());
         }catch (Throwable throwable) {
             whatsapp.handleFailure(MESSAGE, throwable);
             return MessageContainer.empty();
