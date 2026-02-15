@@ -42,6 +42,8 @@ public final class IqStreamNodeHandler extends SocketStream.Handler {
     private final SocketPhonePairing pairingCode;
     private final Executor pingExecutor;
     private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
+    private volatile boolean pingActive;
+    
     public IqStreamNodeHandler(WhatsAppClient whatsapp, WhatsAppClientVerificationHandler.Web webVerificationHandler, SocketPhonePairing pairingCode) {
         super(whatsapp, "iq");
         this.webVerificationHandler = webVerificationHandler;
@@ -88,10 +90,12 @@ public final class IqStreamNodeHandler extends SocketStream.Handler {
             case WhatsAppClientVerificationHandler.Web.QrCode qrHandler -> {
                 printQrCode(qrHandler, container);
                 sendConfirmNode(node, null);
+                pingActive = true;
                 schedulePing();
             }
             case WhatsAppClientVerificationHandler.Web.PairingCode codeHandler -> {
                 askPairingCode(codeHandler);
+                pingActive = true;
                 schedulePing();
             }
             default -> throw new IllegalArgumentException("Cannot verify account: unknown verification method");
@@ -128,6 +132,10 @@ public final class IqStreamNodeHandler extends SocketStream.Handler {
     }
 
     private void schedulePing() {
+        if (!pingActive) {
+            return;
+        }
+        
         var result = sendPing();
         if (result == null) {
             int attempts = reconnectAttempts.incrementAndGet();
@@ -291,5 +299,11 @@ public final class IqStreamNodeHandler extends SocketStream.Handler {
         var lid = device.getRequiredAttributeAsJid("lid");
         whatsapp.store()
                 .setLid(lid);
+    }
+
+    @Override
+    public void reset() {
+        pingActive = false;
+        reconnectAttempts.set(0);
     }
 }
