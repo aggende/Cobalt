@@ -224,18 +224,23 @@ public final class MessageReceiverService {
             var keyBuilder = new ChatMessageKeyBuilder()
                     .id(id);
             if (from.hasServer(JidServer.user()) || from.hasServer(JidServer.legacyUser()) || from.hasServer(JidServer.lid())) {
+                var senderPn = infoNode.getAttributeAsJid("sender_pn");
+                var senderLid = infoNode.getAttributeAsJid("sender_lid");
+                var resolvedFrom = resolveLidToPhone(from, senderPn.orElse(null));
+                if (senderLid.isPresent() && resolvedFrom.hasUserServer()) {
+                    whatsapp.store().registerLidMapping(resolvedFrom, senderLid.get());
+                }
                 var recipient = infoNode
                         .getAttributeAsJid("recipient_pn")
                         .or(() -> infoNode.getAttributeAsJid("recipient"))
-                        .orElse(from);
+                        .orElse(resolvedFrom);
                 keyBuilder.chatJid(recipient);
-                keyBuilder.senderJid(from);
-                var fromMe = Objects.equals(from.withoutData(), localJid.withoutData());
+                keyBuilder.senderJid(resolvedFrom);
+                var fromMe = Objects.equals(resolvedFrom.withoutData(), localJid.withoutData());
                 keyBuilder.fromMe(fromMe);
-                messageBuilder.senderJid(from);
+                messageBuilder.senderJid(resolvedFrom);
                 
-                infoNode.getAttributeAsJid("sender_pn")
-                        .ifPresent(messageBuilder::originalSender);
+                senderPn.ifPresent(messageBuilder::originalSender);
             }else if(from.hasServer(JidServer.bot())) {
                 var meta = infoNode.getChild("meta")
                         .orElseThrow();
@@ -248,15 +253,24 @@ public final class MessageReceiverService {
                 keyBuilder.senderJid(senderJid);
                 keyBuilder.fromMe(Objects.equals(senderJid.withoutData(), localJid.withoutData()));
             } else if(from.hasServer(JidServer.groupOrCommunity()) || from.hasServer(JidServer.broadcast()) || from.hasServer(JidServer.newsletter())) {
-                var participant = infoNode
-                        .getAttributeAsJid("participant_pn")
-                        .or(() -> infoNode.getAttributeAsJid("participant"))
+                var participantPn = infoNode.getAttributeAsJid("participant_pn");
+                var participantRaw = infoNode.getAttributeAsJid("participant");
+                var participantLid = infoNode.getAttributeAsJid("participant_lid");
+                if (participantPn.isPresent() && participantRaw.isPresent() && participantRaw.get().hasLidServer()) {
+                    whatsapp.store().registerLidMapping(participantPn.get(), participantRaw.get());
+                }
+                var participant = participantPn
+                        .or(() -> participantRaw)
                         .orElseThrow(() -> new NoSuchElementException("Missing sender"));
+                var resolvedParticipant = resolveLidToPhone(participant, null);
+                if (participantLid.isPresent() && resolvedParticipant.hasUserServer()) {
+                    whatsapp.store().registerLidMapping(resolvedParticipant, participantLid.get());
+                }
                 keyBuilder.chatJid(from);
-                keyBuilder.senderJid(Objects.requireNonNull(participant, "Missing participant in group message"));
-                var fromMe = Objects.equals(participant.withoutData(), localJid.withoutData());
+                keyBuilder.senderJid(resolvedParticipant);
+                var fromMe = Objects.equals(resolvedParticipant.withoutData(), localJid.withoutData());
                 keyBuilder.fromMe(fromMe);
-                messageBuilder.senderJid(Objects.requireNonNull(participant, "Missing participant in group message"));
+                messageBuilder.senderJid(resolvedParticipant);
             }else {
                 throw new RuntimeException("Unknown value server: " + from.server());
             }
@@ -299,6 +313,17 @@ public final class MessageReceiverService {
                 );
             }
         }
+    }
+
+    private Jid resolveLidToPhone(Jid jid, Jid phoneHint) {
+        if (!jid.hasLidServer()) {
+            return jid;
+        }
+        if (phoneHint != null) {
+            whatsapp.store().registerLidMapping(phoneHint, jid);
+            return phoneHint;
+        }
+        return whatsapp.store().findPhoneByLid(jid).orElse(jid);
     }
 
     private MessageContainer decodeChatMessageContainer(ChatMessageKey messageKey, Node messageNode, Jid signalSenderJid) {
