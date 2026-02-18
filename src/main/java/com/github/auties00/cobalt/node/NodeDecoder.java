@@ -574,7 +574,8 @@ public final class NodeDecoder implements AutoCloseable {
         var agent = read() & 0xFF;
         var device = read() & 0xFF;
         var user = readString();
-        return Jid.of(user, JidServer.user(), device, agent);
+        var server = agent == 0 ? JidServer.user() : JidServer.lid();
+        return Jid.of(user, server, device, agent);
     }
 
     @Override
