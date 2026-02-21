@@ -32,11 +32,15 @@ public final class SocketRequest {
     }
 
     public Node waitForResponse() {
+        return waitForResponse(TIMEOUT);
+    }
+
+    public Node waitForResponse(Duration timeout) {
         if (response == null) {
             synchronized (this) {
                 if (response == null) {
                     try {
-                        wait(TIMEOUT.toMillis());
+                        wait(timeout.toMillis());
                         if (response == null) {
                             throw new NodeTimeoutException(body);
                         }
