@@ -9,6 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set executable permission for Maven wrapper
+        run: chmod +x mvnw
+
       - uses: actions/setup-java@v4
         with:
           java-version: '25'
