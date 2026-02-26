@@ -10,6 +10,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+    env:
+      MAVEN_OPTS: --enable-native-access=ALL-UNNAMED
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,16 +28,19 @@ jobs:
 
       - name: Remove SNAPSHOT and tag
         run: |
-          VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null)
           RELEASE_VERSION="${VERSION%-SNAPSHOT}"
           if [ "$VERSION" != "$RELEASE_VERSION" ]; then
             ./mvnw versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
             git add pom.xml
             git commit -m "release: v${RELEASE_VERSION}"
             git tag "v${RELEASE_VERSION}"
-            git push
+            git pull --rebase origin main
+            git push origin main
             git push origin "v${RELEASE_VERSION}"
           fi
 
