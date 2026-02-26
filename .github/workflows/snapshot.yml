@@ -55,14 +55,16 @@ jobs:
         run: |
           ORG="aggende"
           PACKAGE="com.github.auties00"
-          VERSIONS=$(gh api "/orgs/${ORG}/packages/maven/${PACKAGE}/versions" \
-            --paginate --jq '.[] | select(.name | endswith("-SNAPSHOT")) | "\(.id) \(.name)"' 2>/dev/null) || true
+          VERSIONS=""
+          if RESPONSE=$(gh api "/orgs/${ORG}/packages/maven/${PACKAGE}/versions" --paginate 2>/dev/null); then
+            VERSIONS=$(echo "$RESPONSE" | jq -r '.[] | select(.name | endswith("-SNAPSHOT")) | "\(.id) \(.name)"')
+          fi
           if [ -z "$VERSIONS" ]; then
             echo "No SNAPSHOT versions to clean or package not found yet."
             exit 0
           fi
           echo "$VERSIONS" | while read -r ID NAME; do
-            if [ -n "$ID" ] && [ "$NAME" != "$CURRENT_VERSION" ]; then
+            if [ -n "$ID" ] && [[ "$ID" =~ ^[0-9]+$ ]] && [ "$NAME" != "$CURRENT_VERSION" ]; then
               echo "Deleting old SNAPSHOT: $NAME (id: $ID)"
               gh api --method DELETE "/orgs/${ORG}/packages/maven/${PACKAGE}/versions/${ID}" || true
             fi
