@@ -46,16 +46,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cleanup old SNAPSHOT versions
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURRENT_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          PACKAGE="com.github.auties00.cobalt"
-          VERSIONS=$(gh api "/repos/${{ github.repository }}/packages/maven/${PACKAGE}/versions" \
-            --paginate --jq '.[] | select(.name | endswith("-SNAPSHOT")) | "\(.id) \(.name)"')
-          while read -r ID NAME; do
+          ORG="aggende"
+          PACKAGE="com.github.auties00"
+          VERSIONS=$(gh api "/orgs/${ORG}/packages/maven/${PACKAGE}/versions" \
+            --paginate --jq '.[] | select(.name | endswith("-SNAPSHOT")) | "\(.id) \(.name)"' 2>/dev/null) || true
+          if [ -z "$VERSIONS" ]; then
+            echo "No SNAPSHOT versions to clean or package not found yet."
+            exit 0
+          fi
+          echo "$VERSIONS" | while read -r ID NAME; do
             if [ -n "$ID" ] && [ "$NAME" != "$CURRENT_VERSION" ]; then
               echo "Deleting old SNAPSHOT: $NAME (id: $ID)"
-              gh api --method DELETE "/repos/${{ github.repository }}/packages/maven/${PACKAGE}/versions/${ID}"
+              gh api --method DELETE "/orgs/${ORG}/packages/maven/${PACKAGE}/versions/${ID}" || true
             fi
-          done <<< "$VERSIONS"
+          done
