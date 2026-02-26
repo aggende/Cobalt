@@ -1,6 +1,7 @@
 package com.github.auties00.cobalt.socket.notification;
 
 import com.github.auties00.cobalt.client.WhatsAppClient;
+import com.github.auties00.cobalt.model.jid.Jid;
 import com.github.auties00.cobalt.node.Node;
 import com.github.auties00.cobalt.model.contact.ContactStatus;
 import com.github.auties00.cobalt.socket.SocketStream;
@@ -16,31 +17,40 @@ public final class PresenceStreamNodeHandler extends SocketStream.Handler {
     public void handle(Node node) {
         var status = getUpdateType(node);
         var chatJid = node.getRequiredAttributeAsJid("from");
+        var resolvedChatJid = resolveLidToPhone(chatJid);
         var participantJid = node.getAttributeAsJid("participant");
         if(participantJid.isEmpty()) {
             whatsapp.store()
-                    .findContactByJid(chatJid)
+                    .findContactByJid(resolvedChatJid)
                     .ifPresent(contact -> {
                         contact.setLastKnownPresence(status);
                         contact.setLastSeen(ZonedDateTime.now());
                     });
             for(var listener : whatsapp.store().listeners()) {
-                Thread.startVirtualThread(() -> listener.onContactPresence(whatsapp, chatJid, chatJid));
+                Thread.startVirtualThread(() -> listener.onContactPresence(whatsapp, resolvedChatJid, resolvedChatJid));
             }
         } else {
+            var resolvedParticipantJid = resolveLidToPhone(participantJid.get());
             whatsapp.store()
-                    .findContactByJid(chatJid)
+                    .findContactByJid(resolvedChatJid)
                     .ifPresent(contact -> {
                         contact.setLastKnownPresence(ContactStatus.AVAILABLE);
                         contact.setLastSeen(ZonedDateTime.now());
                     });
             whatsapp.store()
-                    .findChatByJid(chatJid)
-                    .ifPresent(chat -> chat.addPresence(participantJid.get(), status));
+                    .findChatByJid(resolvedChatJid)
+                    .ifPresent(chat -> chat.addPresence(resolvedParticipantJid, status));
             for(var listener : whatsapp.store().listeners()) {
-                Thread.startVirtualThread(() -> listener.onContactPresence(whatsapp, chatJid, participantJid.get()));
+                Thread.startVirtualThread(() -> listener.onContactPresence(whatsapp, resolvedChatJid, resolvedParticipantJid));
             }
         }
+    }
+
+    private Jid resolveLidToPhone(Jid jid) {
+        if (!jid.hasLidServer()) {
+            return jid;
+        }
+        return whatsapp.store().findPhoneByLid(jid).orElse(jid);
     }
     private ContactStatus getUpdateType(Node node) {
         var media = node.getChild()

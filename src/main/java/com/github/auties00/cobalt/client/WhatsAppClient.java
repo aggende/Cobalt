@@ -66,6 +66,7 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -401,6 +402,10 @@ public final class WhatsAppClient {
     }
 
     public Node sendNode(NodeBuilder node, Function<Node, Boolean> filter) {
+        return sendNode(node, filter, null);
+    }
+
+    public Node sendNode(NodeBuilder node, Function<Node, Boolean> filter, Duration timeout) {
         if (!node.hasAttribute("id")) {
             node.attribute("id", SecureBytes.randomHex(10));
         }
@@ -416,7 +421,7 @@ public final class WhatsAppClient {
 
         var request = new SocketRequest(outgoing, filter);
         pendingSocketRequests.put(outgoingId, request);
-        return request.waitForResponse();
+        return timeout != null ? request.waitForResponse(timeout) : request.waitForResponse();
     }
 
     /**
@@ -441,22 +446,24 @@ public final class WhatsAppClient {
      */
     public void logout() {
         var localJid = store.jid();
-        if (localJid.isEmpty()) {
-            disconnect(WhatsAppClientDisconnectReason.LOGGED_OUT);
-        } else {
-            var device = new NodeBuilder()
-                    .description("remove-companion-device")
-                    .attribute("value", localJid.get())
-                    .attribute("reason", "user_initiated")
-                    .build();
-            var iqNode = new NodeBuilder()
-                    .description("iq")
-                    .attribute("xmlns", "md")
-                    .attribute("to", JidServer.user())
-                    .attribute("type", "set")
-                    .content(device);
-            sendNode(iqNode);
+        if (localJid.isPresent()) {
+            try {
+                var device = new NodeBuilder()
+                        .description("remove-companion-device")
+                        .attribute("value", localJid.get())
+                        .attribute("reason", "user_initiated")
+                        .build();
+                var iqNode = new NodeBuilder()
+                        .description("iq")
+                        .attribute("xmlns", "md")
+                        .attribute("to", JidServer.user())
+                        .attribute("type", "set")
+                        .content(device);
+                sendNode(iqNode, null, Duration.ofSeconds(5));
+            } catch (Exception ignored) {
+            }
         }
+        disconnect(WhatsAppClientDisconnectReason.LOGGED_OUT);
     }
 
     /**

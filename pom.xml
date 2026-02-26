@@ -89,7 +89,7 @@
                             </execution>
                         </executions>
                         <configuration>
-                            <release>${java.version}</release>
+                            <release>${jdk.version}</release>
                             <failOnError>true</failOnError>
                             <show>private</show>
                             <debug>true</debug>
@@ -166,7 +166,10 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <java.version>25</java.version>
+        <jdk.version>25</jdk.version>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
         <maven.surefire.plugin.version>3.0.0-M9</maven.surefire.plugin.version>
         <maven.gpg.plugin.version>3.0.1</maven.gpg.plugin.version>
         <maven.compiler.plugin.version>3.11.0</maven.compiler.plugin.version>
@@ -201,7 +204,7 @@
                 <configuration>
                     <source>25</source>
                     <target>25</target>
-                    <release>${java.version}</release>
+                    <release>${jdk.version}</release>
                     <proc>full</proc>
                     <annotationProcessors>
                         <annotationProcessor>it.auties.protobuf.serialization.ProtobufJavacPlugin</annotationProcessor>

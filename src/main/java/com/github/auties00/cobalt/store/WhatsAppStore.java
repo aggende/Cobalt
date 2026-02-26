@@ -1189,6 +1189,9 @@ public final class WhatsAppStore implements SignalProtocolStore {
     public Contact addContact(Contact contact) {
         Objects.requireNonNull(contact, "contact cannot be null");
         contacts.put(contact.jid(), contact);
+        if (contact.jid().hasUserServer()) {
+            contact.lid().ifPresent(lid -> registerLidMapping(contact.jid(), lid));
+        }
         return contact;
     }
 
@@ -1278,6 +1281,10 @@ public final class WhatsAppStore implements SignalProtocolStore {
                 return Optional.ofNullable(result);
             }
         }
+    }
+
+    public int lidMappingCount() {
+        return lidToPhoneMappings.size();
     }
 
     // =====================================================
@@ -1399,6 +1406,13 @@ public final class WhatsAppStore implements SignalProtocolStore {
     public Chat addChat(Chat chat) {
         Objects.requireNonNull(chat, "chat cannot be null");
         chats.put(chat.jid(), chat);
+        var lid = chat.lidJid().orElse(chat.jid().hasLidServer() ? chat.jid() : null);
+        if (lid != null) {
+            var phone = chat.phoneJid().orElse(chat.jid().hasUserServer() ? chat.jid() : null);
+            if (phone != null) {
+                registerLidMapping(phone, lid);
+            }
+        }
         return chat;
     }
 

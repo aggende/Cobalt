@@ -1,6 +1,7 @@
 package com.github.auties00.cobalt.socket.state;
 
 import com.github.auties00.cobalt.client.WhatsAppClient;
+import com.github.auties00.cobalt.exception.SessionClosedException;
 import com.github.auties00.cobalt.media.MediaConnection;
 import com.github.auties00.cobalt.media.MediaHost;
 import com.github.auties00.cobalt.model.jid.JidServer;
@@ -18,6 +19,7 @@ import static com.github.auties00.cobalt.client.WhatsAppClientErrorHandler.Locat
 
 public final class WebScheduleMediaConnectionUpdateStreamNodeHandler extends SocketStream.Handler {
     private static final int DEFAULT_MEDIA_CONNECTION_TTL = 300;
+    private volatile boolean active;
 
     public WebScheduleMediaConnectionUpdateStreamNodeHandler(WhatsAppClient whatsapp) {
         super(whatsapp, "success");
@@ -25,10 +27,15 @@ public final class WebScheduleMediaConnectionUpdateStreamNodeHandler extends Soc
 
     @Override
     public void handle(Node node) {
+        active = true;
         scheduleMediaConnectionUpdate();
     }
 
     private void scheduleMediaConnectionUpdate() {
+        if (!active) {
+            return;
+        }
+        
         MediaConnection mediaConnection = null;
         try {
             var queryRequestBody = new NodeBuilder()
@@ -53,10 +60,16 @@ public final class WebScheduleMediaConnectionUpdateStreamNodeHandler extends Soc
             mediaConnection = new MediaConnection(auth, ttl, maxBuckets, timestamp, hosts);
             whatsapp.store()
                     .setMediaConnection(mediaConnection);
+        } catch (SessionClosedException e) {
+            whatsapp.store().setMediaConnection(null);
+            active = false;
+            return;
         } catch (Exception throwable) {
             whatsapp.store().setMediaConnection(null);
             whatsapp.handleFailure(MEDIA_CONNECTION, throwable);
-        }finally {
+        }
+        
+        if (active) {
             var mediaConnectionTtl = mediaConnection != null ? mediaConnection.ttl() : DEFAULT_MEDIA_CONNECTION_TTL;
             var executor = CompletableFuture.delayedExecutor(mediaConnectionTtl, TimeUnit.SECONDS);
             executor.execute(this::scheduleMediaConnectionUpdate);
@@ -90,5 +103,10 @@ public final class WebScheduleMediaConnectionUpdateStreamNodeHandler extends Soc
     private MediaHost.Fallback parseFallbackHost(Node host) {
         var hostname = host.getRequiredAttributeAsString("hostname");
         return new MediaHost.Fallback(hostname);
+    }
+
+    @Override
+    public void reset() {
+        active = false;
     }
 }

@@ -25,7 +25,7 @@ public final class ErrorStreamNodeHandler extends SocketStream.Handler {
         if (node.hasChild("xml-not-well-formed")) {
             whatsapp.handleFailure(STREAM, new MalformedNodeException());
         } else if (node.hasChild("conflict")) {
-            whatsapp.handleFailure(STREAM, new SessionConflictException());
+            handleConflict(node);
         } else if (node.hasChild("bad-mac")) {
             whatsapp.handleFailure(STREAM, new SessionBadMacException());
         } else {
