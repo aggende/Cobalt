@@ -17,6 +17,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Sync with origin/main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+
       - name: Set executable permission for Maven wrapper
         run: chmod +x mvnw
 
@@ -28,10 +35,6 @@ jobs:
 
       - name: Remove SNAPSHOT and tag
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git rebase origin/main
           VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null)
           RELEASE_VERSION="${VERSION%-SNAPSHOT}"
           if [ "$VERSION" != "$RELEASE_VERSION" ]; then
