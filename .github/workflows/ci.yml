@@ -1,0 +1,21 @@
+name: CI
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set executable permission for Maven wrapper
+        run: chmod +x mvnw
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - run: ./mvnw --batch-mode compile -DskipTests

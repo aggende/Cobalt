@@ -1,0 +1,67 @@
+name: Snapshot
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set executable permission for Maven wrapper
+        run: chmod +x mvnw
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Ensure SNAPSHOT suffix
+        id: version
+        run: |
+          VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
+          if [[ "$VERSION" != *-SNAPSHOT ]]; then
+            SNAPSHOT_VERSION="${VERSION}-SNAPSHOT"
+            ./mvnw versions:set -DnewVersion="$SNAPSHOT_VERSION" -DgenerateBackupPoms=false
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add pom.xml
+            git commit -m "ci: add -SNAPSHOT suffix to version ${VERSION}"
+            git push
+            echo "version=$SNAPSHOT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy SNAPSHOT
+        run: ./mvnw --batch-mode deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup old SNAPSHOT versions
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ORG="aggende"
+          PACKAGE="com.github.auties00"
+          VERSIONS=$(gh api "/orgs/${ORG}/packages/maven/${PACKAGE}/versions" \
+            --paginate --jq '.[] | select(.name | endswith("-SNAPSHOT")) | "\(.id) \(.name)"' 2>/dev/null) || true
+          if [ -z "$VERSIONS" ]; then
+            echo "No SNAPSHOT versions to clean or package not found yet."
+            exit 0
+          fi
+          echo "$VERSIONS" | while read -r ID NAME; do
+            if [ -n "$ID" ] && [ "$NAME" != "$CURRENT_VERSION" ]; then
+              echo "Deleting old SNAPSHOT: $NAME (id: $ID)"
+              gh api --method DELETE "/orgs/${ORG}/packages/maven/${PACKAGE}/versions/${ID}" || true
+            fi
+          done
