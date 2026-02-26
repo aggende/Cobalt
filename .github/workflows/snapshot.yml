@@ -9,6 +9,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+    env:
+      MAVEN_OPTS: --enable-native-access=ALL-UNNAMED
     steps:
       - uses: actions/checkout@v4
         with:
